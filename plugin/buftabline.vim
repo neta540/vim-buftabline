@@ -29,22 +29,156 @@ endif
 
 scriptencoding utf-8
 
-augroup BufTabLine
+augroup buftabline
 autocmd!
 
-hi default link BufTabLineCurrent TabLineSel
-hi default link BufTabLineActive  PmenuSel
-hi default link BufTabLineHidden  TabLine
-hi default link BufTabLineFill    TabLineFill
+"hi default link buftablineCurrent TabLineSel
+hi default link buftablineCurrent TabLineSel
+hi default link buftablineActive  PmenuSel
+hi default link buftablineHidden  TabLine
+hi default link buftablineFill    TabLineFill
 
 let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
 let g:buftabline_indicators = get(g:, 'buftabline_indicators', 0)
 let g:buftabline_separators = get(g:, 'buftabline_separators', 0)
 let g:buftabline_show       = get(g:, 'buftabline_show',       2)
 
+
+" This is the users ordered buffer
+" initially, it should be exactly the same as the buffers
+" It maps from display index => buffer number
+"
+" * remove messages
+" * integrate with airline's tabline - or just theme this nicely
+if !exists('g:buftabline_ordered_buffs')
+    let g:buftabline_ordered_buffs = []
+endif
+
 function! buftabline#user_buffers() " help buffers are always unlisted, but quickfix buffers are not
 	return filter(range(1,bufnr('$')),'buflisted(v:val) && "quickfix" !=? getbufvar(v:val, "&buftype")')
 endfunction
+
+function! buftabline#get_curr_buf_idx()
+	let curBuf = winbufnr(0)
+	let buf_order = g:buftabline_ordered_buffs
+
+    " TODO: might be worth refactoring this to use a dict lookup instead
+    " would only really matter if there were a lot of buffers open
+	let bufIdx = 0
+	for cur_ordered in buf_order
+		if cur_ordered == curBuf
+			let curOrderedBuf = bufIdx
+			break
+		endif
+		let bufIdx+=1
+	endfor
+
+	return bufIdx
+endfunction
+
+function! buftabline#get_dir_buffer_idx_ordered(isForward)
+	let buf_order = g:buftabline_ordered_buffs
+
+    let dir = -1
+    if a:isForward
+        let dir = 1
+    endif
+
+    let curBufIdx = buftabline#get_curr_buf_idx()
+    let tgtBufIdx = curBufIdx+dir
+
+	" wrap around	
+	if tgtBufIdx < 0
+		let tgtBufIdx = len(buf_order)-1 
+    elseif tgtBufIdx == len(buf_order)
+        let tgtBufIdx = 0
+    endif
+
+    return tgtBufIdx
+endfunction
+
+function! buftabline#get_dir_buffer_ordered(isForward)
+	let buf_order = g:buftabline_ordered_buffs
+
+    "let dir = -1
+    "if a:isForward
+        "let dir = 1
+    "endif
+
+    "let curBufIdx = buftabline#get_curr_buf_idx()
+    "let tgtBufIdx = curBufIdx+dir
+
+	"" wrap around	
+	"if tgtBufIdx < 0
+		"let tgtBufIdx = len(buf_order)-1 
+    "elseif tgtBufIdx == len(buf_order)
+        "let tgtBufIdx = 0
+    "endif
+
+    let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward)
+	let tgtOrdered = buf_order[tgtBufIdx]
+	return tgtOrdered
+endfunction
+
+
+" Ordered Buffer Navigation
+""""""""""""""""""""""""""""""""""
+function! buftabline#get_next_buffer_ordered()
+    return buftabline#get_dir_buffer_ordered(1)
+endfunction
+
+function! buftabline#get_prev_buffer_ordered()
+    return buftabline#get_dir_buffer_ordered(0)
+endfunction
+
+function! buftabline#next_buffer_ordered()
+    execute ":b " . buftabline#get_next_buffer_ordered()
+endfunction
+
+function! buftabline#prev_buffer_ordered()
+    execute ":b " . buftabline#get_prev_buffer_ordered()
+endfunction
+
+
+" Buffer re-ordering
+""""""""""""""""""""""""""""""""""
+function! buftabline#move_cur_buf_dir(isForward)
+	let buf_order = g:buftabline_ordered_buffs
+    let curBufIdx = buftabline#get_curr_buf_idx()
+    let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward) 
+
+    let tmp = buf_order[curBufIdx]
+    let buf_order[curBufIdx] = buf_order[tgtBufIdx]
+    let buf_order[tgtBufIdx] = tmp
+
+	" re-render the tabline since stuff got moved around
+	call buftabline#update(0)
+endfunction
+
+function! buftabline#move_cur_buf_forward()
+    call buftabline#move_cur_buf_dir(1)
+endfunction
+
+function! buftabline#move_cur_buf_backward()
+    call buftabline#move_cur_buf_dir(0)
+endfunction
+
+" plugin exposed functions
+com! -bar BuffReorderMoveCurBufBackward call buftabline#move_cur_buf_backward()
+com! -bar BuffReorderMoveCurBufForward call buftabline#move_cur_buf_forward()
+
+com! -bar BuffReorderNextBuffer call buftabline#next_buffer_ordered()
+com! -bar BuffReorderPrevBuffer call buftabline#prev_buffer_ordered()
+
+" tmp mappings
+:map - :BuffReorderPrevBuffer<CR>
+:map = :BuffReorderNextBuffer<CR>
+:map <c-[> :BuffReorderMoveCurBufBackward<CR>
+:map <c-]> :BuffReorderMoveCurBufForward<CR>
+
+
+
+
 
 let s:prev_currentbuf = winbufnr(0)
 function! buftabline#render()
@@ -55,12 +189,43 @@ function! buftabline#render()
 
 	let bufnums = buftabline#user_buffers()
 
+	"echom printf("prev buf in order: %s", buftabline#get_prev_buffer_ordered())
+    "echom printf("next buf in order: %s", buftabline#get_next_buffer_ordered())
+
+	let buf_order = g:buftabline_ordered_buffs
+	 "TODO: this should really not be re-set every time of course
+	if len(buf_order)==0
+		echom "resetting buf order to default"
+	    " apparently vimscript doesnt do aliasing with this?
+	    " i figured the reference created with buf_order would update
+	    " the original global array, but it doesnt seem to be the case.
+	    let	g:buftabline_ordered_buffs = copy(bufnums)
+	    let buf_order = g:buftabline_ordered_buffs
+	elseif len(buf_order) < len(bufnums)
+	    let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(buf_order):len(bufnums)] 
+	    let buf_order = g:buftabline_ordered_buffs
+	elseif len(buf_order) > len(bufnums)
+	    " find the buffer which was deleted
+	    echom "some buffer was deleted"
+	    
+	endif
+
 	" pick up data on all the buffers
 	let tabs = []
 	let tabs_by_tail = {}
 	let currentbuf = winbufnr(0)
 	let screen_num = 0
+    
+    echom printf("going through %s buffers", len(bufnums))
+    echom printf("have %s ordered buffers", len(buf_order))
+
+	let bufIdx = 0
 	for bufnum in bufnums
+		echom bufnum
+		let old_bufnum = bufnum
+		let bufnum = buf_order[bufIdx]
+		echom printf('translating %s to %s', old_bufnum, bufnum)
+	
 		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
 		let tab = { 'num': bufnum }
 		let tab.hilite = currentbuf == bufnum ? 'Current' : bufwinnr(bufnum) > 0 ? 'Active' : 'Hidden'
@@ -70,10 +235,13 @@ function! buftabline#render()
 			let suf = isdirectory(bufpath) ? '/' : ''
 			if strlen(suf) | let bufpath = fnamemodify(bufpath, ':h') | endif
 			let tab.head = fnamemodify(bufpath, ':h')
+			" tab.tail is what's displayed for the most part. it's the end of the filepath (the filename)
 			let tab.tail = fnamemodify(bufpath, ':t')
+			echom tab.tail
 			let pre = ( show_mod && getbufvar(bufnum, '&mod') ? '+' : '' ) . screen_num
 			if strlen(pre) | let pre .= ' ' | endif
 			let tab.fmt = pre . '%s' . suf
+			"let tab.fmt = pre . '%s' . suf
 			let tabs_by_tail[tab.tail] = get(tabs_by_tail, tab.tail, []) + [tab]
 		elseif -1 < index(['nofile','acwrite'], getbufvar(bufnum, '&buftype')) " scratch buffer
 			let tab.label = ( show_mod ? '!' . screen_num : screen_num ? screen_num . ' !' : '!' )
@@ -82,6 +250,7 @@ function! buftabline#render()
 			\             . ( screen_num ? screen_num : '*' )
 		endif
 		let tabs += [tab]
+		let bufIdx+=1
 	endfor
 
 	" disambiguate same-basename files by adding trailing path segments
@@ -157,7 +326,7 @@ function! buftabline#render()
 
 	if len(tabs) | let tabs[0].label = substitute(tabs[0].label, lpad, ' ', '') | endif
 
-	return '%1X' . join(map(tabs,'printf("%%#BufTabLine%s#%s",v:val.hilite,v:val.label)'),'') . '%#BufTabLineFill#'
+	return '%1X' . join(map(tabs,'printf("%%#buftabline%s#%s",v:val.hilite,v:val.label)'),'') . '%#buftablineFill#'
 endfunction
 
 function! buftabline#update(deletion)
@@ -179,6 +348,25 @@ function! buftabline#update(deletion)
 	elseif 2 == g:buftabline_show
 		set showtabline=2
 	endif
+
+    if a:deletion
+        echom "buffer was deleted " . expand('<abuf>') 
+        
+
+		"let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(buf_order):len(bufnums)] 
+	    let buf_order = g:buftabline_ordered_buffs
+        let deletedBuf = expand('<abuf>')
+
+        let bufIdx = 0
+        for buf in buf_order
+            if buf == deletedBuf
+                call remove(g:buftabline_ordered_buffs, bufIdx)
+                break
+            endif
+            let bufIdx+=1
+        endfor
+    endif
+
 	set tabline=%!buftabline#render()
 endfunction
 
@@ -187,13 +375,13 @@ autocmd BufDelete * call buftabline#update(1)
 autocmd TabEnter  * call buftabline#update(0)
 autocmd VimEnter  * call buftabline#update(0)
 
-noremap <silent> <Plug>BufTabLine.Go(1)  :exe 'b'.buftabline#user_buffers()[0]<cr>
-noremap <silent> <Plug>BufTabLine.Go(2)  :exe 'b'.buftabline#user_buffers()[1]<cr>
-noremap <silent> <Plug>BufTabLine.Go(3)  :exe 'b'.buftabline#user_buffers()[2]<cr>
-noremap <silent> <Plug>BufTabLine.Go(4)  :exe 'b'.buftabline#user_buffers()[3]<cr>
-noremap <silent> <Plug>BufTabLine.Go(5)  :exe 'b'.buftabline#user_buffers()[4]<cr>
-noremap <silent> <Plug>BufTabLine.Go(6)  :exe 'b'.buftabline#user_buffers()[5]<cr>
-noremap <silent> <Plug>BufTabLine.Go(7)  :exe 'b'.buftabline#user_buffers()[6]<cr>
-noremap <silent> <Plug>BufTabLine.Go(8)  :exe 'b'.buftabline#user_buffers()[7]<cr>
-noremap <silent> <Plug>BufTabLine.Go(9)  :exe 'b'.buftabline#user_buffers()[8]<cr>
-noremap <silent> <Plug>BufTabLine.Go(10) :exe 'b'.buftabline#user_buffers()[9]<cr>
+"noremap <silent> <Plug>buftabline.Go(1)  :exe 'b'.buftabline#user_buffers()[0]<cr>
+"noremap <silent> <Plug>buftabline.Go(2)  :exe 'b'.buftabline#user_buffers()[1]<cr>
+"noremap <silent> <Plug>buftabline.Go(3)  :exe 'b'.buftabline#user_buffers()[2]<cr>
+"noremap <silent> <Plug>buftabline.Go(4)  :exe 'b'.buftabline#user_buffers()[3]<cr>
+"noremap <silent> <Plug>buftabline.Go(5)  :exe 'b'.buftabline#user_buffers()[4]<cr>
+"noremap <silent> <Plug>buftabline.Go(6)  :exe 'b'.buftabline#user_buffers()[5]<cr>
+"noremap <silent> <Plug>buftabline.Go(7)  :exe 'b'.buftabline#user_buffers()[6]<cr>
+"noremap <silent> <Plug>buftabline.Go(8)  :exe 'b'.buftabline#user_buffers()[7]<cr>
+"noremap <silent> <Plug>buftabline.Go(9)  :exe 'b'.buftabline#user_buffers()[8]<cr>
+"noremap <silent> <Plug>buftabline.Go(10) :exe 'b'.buftabline#user_buffers()[9]<cr>
