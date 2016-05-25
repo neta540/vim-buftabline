@@ -47,12 +47,33 @@ let g:buftabline_show       = get(g:, 'buftabline_show',       2)
 " initially, it should be exactly the same as the buffers
 " It maps from display index => buffer number
 "
+" The buffer numbers aren't going to be the same inbetween sessions, so
+" the ordered_buffs array wont work as-is. There needs to be a way of 
+" looking up the buffer numbers and re-building the array.
+" An array of filenames could work?
+
+" to save:
+" for buffer in ordered buffers
+"     get buffer full filename (use expand)
+"     append to session array
+
+" to load:
+" for buffer in loaded buffers
+"     get full filename via expand
+"     map filename => buffer
+" for buffer in session array
+"     use bufnr(expand(filename))
+"     use filename to lookup buffer in filename:buffer map
+"     append buffer to ordered buffers
+
+"
 " * remove messages
 " * integrate with airline's tabline - or just theme this nicely
 " * session support
 if !exists('g:buftabline_ordered_buffs')
     let g:buftabline_ordered_buffs = []
 endif
+
 
 function! buftabline#user_buffers() " help buffers are always unlisted, but quickfix buffers are not
 	return filter(range(1,bufnr('$')),'buflisted(v:val) && "quickfix" !=? getbufvar(v:val, "&buftype")')
@@ -135,6 +156,7 @@ function! buftabline#move_cur_buf_dir(isForward)
     let orderBuffs[curBufIdx] = orderBuffs[tgtBufIdx]
     let orderBuffs[tgtBufIdx] = tmp
 
+    call buftabline#updateSessionOrder()
 	" re-render the tabline since stuff got moved around
 	call buftabline#update(0)
 endfunction
@@ -154,6 +176,13 @@ com! -bar BuffReorderMoveCurBufForward call buftabline#move_cur_buf_forward()
 com! -bar BuffReorderNextBuffer call buftabline#next_buffer_ordered()
 com! -bar BuffReorderPrevBuffer call buftabline#prev_buffer_ordered()
 
+function! buftabline#updateSessionOrder()
+    let g:buftabline_session_order = []
+    for bufnum in g:buftabline_ordered_buffs
+        let fname = expand(bufname(bufnum))
+        let g:buftabline_session_order += [fname]
+    endfor   
+endfunction
 
 let s:prev_currentbuf = winbufnr(0)
 function! buftabline#render()
@@ -166,14 +195,35 @@ function! buftabline#render()
 
 	let orderBuffs = g:buftabline_ordered_buffs
 	if len(orderBuffs)==0
-	    " apparently vimscript doesnt do aliasing with this?
-	    " i figured the reference created with orderBuffs would update
-	    " the original global array, but it doesnt seem to be the case.
-	    let	g:buftabline_ordered_buffs = copy(bufnums)
-	    let orderBuffs = g:buftabline_ordered_buffs
+        
+        if exists('g:buftabline_session_order') && len(g:buftabline_session_order) > 0
+            let bufLookup = {}
+            for bufnum in bufnums
+                let fname = bufname(bufnum)
+                let bufLookup[fname] = bufnum
+            endfor
+         
+            " Map the ordered filenames to their local buffer numbers 
+            for sessionFname in g:buftabline_session_order
+                let localBuf = bufnr(expand(sessionFname))
+                echom "localbuf: " . localBuf
+                let g:buftabline_ordered_buffs += [localBuf] 
+            endfor 
+ 
+        else
+            " apparently vimscript doesnt do aliasing with this?
+            " i figured the reference created with orderBuffs would update
+            " the original global array, but it doesnt seem to be the case.
+            let	g:buftabline_ordered_buffs = copy(bufnums)
+            let orderBuffs = g:buftabline_ordered_buffs
+
+            call buftabline#updateSessionOrder()
+        endif
+
 	elseif len(orderBuffs) < len(bufnums)
 	    let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(orderBuffs):len(bufnums)] 
 	    let orderBuffs = g:buftabline_ordered_buffs
+        call buftabline#updateSessionOrder()
 	endif
 
 	" pick up data on all the buffers
@@ -320,6 +370,8 @@ function! buftabline#update(deletion)
             endif
             let bufIdx+=1
         endfor
+
+        call buftabline#updateSessionOrder()
     endif
 
 	set tabline=%!buftabline#render()
