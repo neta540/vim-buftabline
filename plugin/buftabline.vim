@@ -32,7 +32,6 @@ scriptencoding utf-8
 augroup buftabline
 autocmd!
 
-"hi default link buftablineCurrent TabLineSel
 hi default link buftablineCurrent TabLineSel
 hi default link buftablineActive  PmenuSel
 hi default link buftablineHidden  TabLine
