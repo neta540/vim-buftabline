@@ -50,6 +50,7 @@ let g:buftabline_show       = get(g:, 'buftabline_show',       2)
 "
 " * remove messages
 " * integrate with airline's tabline - or just theme this nicely
+" * session support
 if !exists('g:buftabline_ordered_buffs')
     let g:buftabline_ordered_buffs = []
 endif
@@ -60,12 +61,12 @@ endfunction
 
 function! buftabline#get_curr_buf_idx()
 	let curBuf = winbufnr(0)
-	let buf_order = g:buftabline_ordered_buffs
+	let orderBuffs = g:buftabline_ordered_buffs
 
     " TODO: might be worth refactoring this to use a dict lookup instead
     " would only really matter if there were a lot of buffers open
 	let bufIdx = 0
-	for cur_ordered in buf_order
+	for cur_ordered in orderBuffs
 		if cur_ordered == curBuf
 			let curOrderedBuf = bufIdx
 			break
@@ -77,7 +78,7 @@ function! buftabline#get_curr_buf_idx()
 endfunction
 
 function! buftabline#get_dir_buffer_idx_ordered(isForward)
-	let buf_order = g:buftabline_ordered_buffs
+	let orderBuffs = g:buftabline_ordered_buffs
 
     let dir = -1
     if a:isForward
@@ -89,8 +90,8 @@ function! buftabline#get_dir_buffer_idx_ordered(isForward)
 
 	" wrap around	
 	if tgtBufIdx < 0
-		let tgtBufIdx = len(buf_order)-1 
-    elseif tgtBufIdx == len(buf_order)
+		let tgtBufIdx = len(orderBuffs)-1 
+    elseif tgtBufIdx == len(orderBuffs)
         let tgtBufIdx = 0
     endif
 
@@ -98,25 +99,9 @@ function! buftabline#get_dir_buffer_idx_ordered(isForward)
 endfunction
 
 function! buftabline#get_dir_buffer_ordered(isForward)
-	let buf_order = g:buftabline_ordered_buffs
-
-    "let dir = -1
-    "if a:isForward
-        "let dir = 1
-    "endif
-
-    "let curBufIdx = buftabline#get_curr_buf_idx()
-    "let tgtBufIdx = curBufIdx+dir
-
-	"" wrap around	
-	"if tgtBufIdx < 0
-		"let tgtBufIdx = len(buf_order)-1 
-    "elseif tgtBufIdx == len(buf_order)
-        "let tgtBufIdx = 0
-    "endif
-
+	let orderBuffs = g:buftabline_ordered_buffs
     let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward)
-	let tgtOrdered = buf_order[tgtBufIdx]
+	let tgtOrdered = orderBuffs[tgtBufIdx]
 	return tgtOrdered
 endfunction
 
@@ -143,13 +128,13 @@ endfunction
 " Buffer re-ordering
 """"""""""""""""""""""""""""""""""
 function! buftabline#move_cur_buf_dir(isForward)
-	let buf_order = g:buftabline_ordered_buffs
+	let orderBuffs = g:buftabline_ordered_buffs
     let curBufIdx = buftabline#get_curr_buf_idx()
     let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward) 
 
-    let tmp = buf_order[curBufIdx]
-    let buf_order[curBufIdx] = buf_order[tgtBufIdx]
-    let buf_order[tgtBufIdx] = tmp
+    let tmp = orderBuffs[curBufIdx]
+    let orderBuffs[curBufIdx] = orderBuffs[tgtBufIdx]
+    let orderBuffs[tgtBufIdx] = tmp
 
 	" re-render the tabline since stuff got moved around
 	call buftabline#update(0)
@@ -189,25 +174,16 @@ function! buftabline#render()
 
 	let bufnums = buftabline#user_buffers()
 
-	"echom printf("prev buf in order: %s", buftabline#get_prev_buffer_ordered())
-    "echom printf("next buf in order: %s", buftabline#get_next_buffer_ordered())
-
-	let buf_order = g:buftabline_ordered_buffs
-	 "TODO: this should really not be re-set every time of course
-	if len(buf_order)==0
-		echom "resetting buf order to default"
+	let orderBuffs = g:buftabline_ordered_buffs
+	if len(orderBuffs)==0
 	    " apparently vimscript doesnt do aliasing with this?
-	    " i figured the reference created with buf_order would update
+	    " i figured the reference created with orderBuffs would update
 	    " the original global array, but it doesnt seem to be the case.
 	    let	g:buftabline_ordered_buffs = copy(bufnums)
-	    let buf_order = g:buftabline_ordered_buffs
-	elseif len(buf_order) < len(bufnums)
-	    let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(buf_order):len(bufnums)] 
-	    let buf_order = g:buftabline_ordered_buffs
-	elseif len(buf_order) > len(bufnums)
-	    " find the buffer which was deleted
-	    echom "some buffer was deleted"
-	    
+	    let orderBuffs = g:buftabline_ordered_buffs
+	elseif len(orderBuffs) < len(bufnums)
+	    let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(orderBuffs):len(bufnums)] 
+	    let orderBuffs = g:buftabline_ordered_buffs
 	endif
 
 	" pick up data on all the buffers
@@ -216,15 +192,11 @@ function! buftabline#render()
 	let currentbuf = winbufnr(0)
 	let screen_num = 0
     
-    echom printf("going through %s buffers", len(bufnums))
-    echom printf("have %s ordered buffers", len(buf_order))
-
 	let bufIdx = 0
 	for bufnum in bufnums
-		echom bufnum
 		let old_bufnum = bufnum
-		let bufnum = buf_order[bufIdx]
-		echom printf('translating %s to %s', old_bufnum, bufnum)
+		let bufnum = orderBuffs[bufIdx]
+		"echom printf('translating %s to %s', old_bufnum, bufnum)
 	
 		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
 		let tab = { 'num': bufnum }
@@ -235,9 +207,7 @@ function! buftabline#render()
 			let suf = isdirectory(bufpath) ? '/' : ''
 			if strlen(suf) | let bufpath = fnamemodify(bufpath, ':h') | endif
 			let tab.head = fnamemodify(bufpath, ':h')
-			" tab.tail is what's displayed for the most part. it's the end of the filepath (the filename)
 			let tab.tail = fnamemodify(bufpath, ':t')
-			echom tab.tail
 			let pre = ( show_mod && getbufvar(bufnum, '&mod') ? '+' : '' ) . screen_num
 			if strlen(pre) | let pre .= ' ' | endif
 			let tab.fmt = pre . '%s' . suf
@@ -350,15 +320,10 @@ function! buftabline#update(deletion)
 	endif
 
     if a:deletion
-        echom "buffer was deleted " . expand('<abuf>') 
-        
-
-		"let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(buf_order):len(bufnums)] 
-	    let buf_order = g:buftabline_ordered_buffs
         let deletedBuf = expand('<abuf>')
 
         let bufIdx = 0
-        for buf in buf_order
+        for buf in g:buftabline_ordered_buffs 
             if buf == deletedBuf
                 call remove(g:buftabline_ordered_buffs, bufIdx)
                 break
