@@ -155,15 +155,6 @@ com! -bar BuffReorderMoveCurBufForward call buftabline#move_cur_buf_forward()
 com! -bar BuffReorderNextBuffer call buftabline#next_buffer_ordered()
 com! -bar BuffReorderPrevBuffer call buftabline#prev_buffer_ordered()
 
-" tmp mappings
-:map - :BuffReorderPrevBuffer<CR>
-:map = :BuffReorderNextBuffer<CR>
-:map <c-[> :BuffReorderMoveCurBufBackward<CR>
-:map <c-]> :BuffReorderMoveCurBufForward<CR>
-
-
-
-
 
 let s:prev_currentbuf = winbufnr(0)
 function! buftabline#render()
