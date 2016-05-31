@@ -254,6 +254,8 @@ function! buftabline#render()
             call buftabline#updateSessionOrder()
    
         else
+            " completely copy, nothing ordered exists to use
+            " 
             " apparently vimscript doesnt do aliasing with this?
             " i figured the reference created with orderBuffs would update
             " the original global array, but it doesnt seem to be the case.
@@ -269,7 +271,6 @@ function! buftabline#render()
     "     call buftabline#updateSessionOrder()
     " elseif len(orderBuffs) > len(bufnums)
     "     echom "orderBuffers len > bufnums len"
-	else
 	
 	endif
 
