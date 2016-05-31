@@ -32,6 +32,11 @@ scriptencoding utf-8
 augroup buftabline
 autocmd!
 
+" Example colors:
+" exe 'hi! TabLine ctermfg=250 ctermbg=234 gui=underline guibg=DarkGrey'
+" exe 'hi! TabLineSel term=reverse cterm=reverse ctermfg=110 ctermbg=234 gui=bold'
+" exe 'hi! TabLineFill term=reverse cterm=reverse ctermfg=234 ctermbg=235 gui=reverse'
+
 hi default link buftablineCurrent TabLineSel
 hi default link buftablineActive  PmenuSel
 hi default link buftablineHidden  TabLine
@@ -48,9 +53,7 @@ let g:buftabline_show       = get(g:, 'buftabline_show',       2)
 " It maps from display index => buffer number
 "
 " The buffer numbers aren't going to be the same inbetween sessions, so
-" the ordered_buffs array wont work as-is. There needs to be a way of 
-" looking up the buffer numbers and re-building the array.
-" An array of filenames could work?
+" a few things have to be changed to accomodate session loading.
 
 " to save:
 " for buffer in ordered buffers
@@ -66,10 +69,10 @@ let g:buftabline_show       = get(g:, 'buftabline_show',       2)
 "     use filename to lookup buffer in filename:buffer map
 "     append buffer to ordered buffers
 
-"
-" * remove messages
-" * integrate with airline's tabline - or just theme this nicely
-" * session support
+" TODO:
+"   * remove messages
+"   * integrate with airline's tabline - or just theme this nicely
+"   * fix hotkeys to jump directly to buffer by number
 if !exists('g:buftabline_ordered_buffs')
     let g:buftabline_ordered_buffs = []
 endif
@@ -264,14 +267,6 @@ function! buftabline#render()
 
             call buftabline#updateSessionOrder()
         endif
-		
-	" elseif len(orderBuffs) < len(bufnums)
-	"     let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(orderBuffs):len(bufnums)] 
-	"     let orderBuffs = g:buftabline_ordered_buffs
-    "     call buftabline#updateSessionOrder()
-    " elseif len(orderBuffs) > len(bufnums)
-    "     echom "orderBuffers len > bufnums len"
-	
 	endif
 
 	" pick up data on all the buffers
