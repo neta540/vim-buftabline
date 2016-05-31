@@ -267,6 +267,11 @@ function! buftabline#render()
 
             call buftabline#updateSessionOrder()
         endif
+    elseif len(orderBuffs) < len(bufnums)
+        " This could use the full buffer-ordered buffer correction code above
+        " but this should be faster.
+        let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(orderBuffs):len(bufnums)]
+        let orderBuffs = g:buftabline_ordered_buffs
 	endif
 
 	" pick up data on all the buffers
@@ -278,7 +283,27 @@ function! buftabline#render()
 	let bufIdx = 0
 	for bufnum in bufnums
 		let old_bufnum = bufnum
-		let bufnum = orderBuffs[bufIdx]
+		" There can be buffers outside of what we care about ordering
+		" EG: the quickfix buffer
+		" and yet we still need to display them
+		" This is kind of optimistic, since this could mask a bug.
+		" For instance, we could be somehow missing an ordinary buffer
+		" in our list of ordered buffers.
+        " if bufIdx >= len(orderBuffs)
+        "     echom "bufidx " . bufIdx
+        "     echom "buftype " . getbufvar(bufnum, "&buftype")
+        "     echom "bufname " . bufname(bufnum)
+        " endif
+
+		" ignore unlisted buffers and quickfix buffers
+		" because they wont be in our ordered list
+		" if buflisted(bufnum) && getbufvar(bufnum, "&buftype") != "quickfix" 
+        "     if bufIdx < len(orderBuffs)
+		"         let bufnum = orderBuffs[bufIdx]
+		"     endif
+		" endif
+        let bufnum = orderBuffs[bufIdx]
+
 		"echom printf('translating %s to %s', old_bufnum, bufnum)
 	
 		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
