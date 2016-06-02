@@ -41,6 +41,7 @@ hi default link buftablineCurrent TabLineSel
 hi default link buftablineActive  PmenuSel
 hi default link buftablineHidden  TabLine
 hi default link buftablineFill    TabLineFill
+hi default link buftablineGrey    Normal 
 
 let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
 let g:buftabline_indicators = get(g:, 'buftabline_indicators', 0)
@@ -404,7 +405,7 @@ function! buftabline#render()
 
 	if len(tabs) | let tabs[0].label = substitute(tabs[0].label, lpad, ' ', '') | endif
 
-	return '%1X' . join(map(tabs,'printf("%%#buftabline%s#%s",v:val.hilite,v:val.label)'),'') . '%#buftablineFill#'
+	return '%1X' . join(map(tabs,'printf("%%#buftabline%s#%s%%#buftablineGrey#|",v:val.hilite,v:val.label)'),'') . '%#buftablineFill#'
 endfunction
 
 function! buftabline#update(deletion)
