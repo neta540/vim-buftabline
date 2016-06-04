@@ -409,6 +409,7 @@ function! buftabline#render()
 endfunction
 
 function! buftabline#update(deletion)
+    " echom "buftabline update"
 	set tabline=
 	if tabpagenr('$') > 1 | set guioptions+=e showtabline=2 | return | endif
 	set guioptions-=e
@@ -443,10 +444,13 @@ function! buftabline#update(deletion)
         call buftabline#updateSessionOrder()
     endif
 
-	set tabline=%!buftabline#render()
+    set tabline=%!buftabline#render()
 endfunction
 
 autocmd BufAdd    * call buftabline#update(0)
+autocmd BufLeave  * call buftabline#update(0)
+autocmd BufUnload * call buftabline#update(0)
+autocmd BufEnter  * call buftabline#update(0)
 autocmd BufDelete * call buftabline#update(1)
 autocmd TabEnter  * call buftabline#update(0)
 autocmd VimEnter  * call buftabline#update(0)
