@@ -114,8 +114,8 @@ function! buftabline#get_dir_buffer_idx_ordered(isForward)
 
 	" wrap around	
 	if tgtBufIdx < 0
-		let tgtBufIdx = len(orderBuffs)-1 
-    elseif tgtBufIdx == len(orderBuffs)
+		let tgtBufIdx = len(g:buftabline_ordered_buffs)-1 
+    elseif tgtBufIdx == len(g:buftabline_ordered_buffs)
         let tgtBufIdx = 0
     endif
 
@@ -123,9 +123,9 @@ function! buftabline#get_dir_buffer_idx_ordered(isForward)
 endfunction
 
 function! buftabline#get_dir_buffer_ordered(isForward)
-	let orderBuffs = g:buftabline_ordered_buffs
+	" let orderBuffs = g:buftabline_ordered_buffs
     let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward)
-	let tgtOrdered = orderBuffs[tgtBufIdx]
+	let tgtOrdered = g:buftabline_ordered_buffs[tgtBufIdx]
 	return tgtOrdered
 endfunction
 
