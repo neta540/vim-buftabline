@@ -85,12 +85,12 @@ endfunction
 
 function! buftabline#get_curr_buf_idx()
 	let curBuf = winbufnr(0)
-	let orderBuffs = g:buftabline_ordered_buffs
+	" let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
 
     " TODO: might be worth refactoring this to use a dict lookup instead
     " would only really matter if there were a lot of buffers open
 	let bufIdx = 0
-	for cur_ordered in orderBuffs
+	for cur_ordered in g:buftabline_ordered_buffs  
 		if cur_ordered == curBuf
 			let curOrderedBuf = bufIdx
 			break
@@ -102,7 +102,7 @@ function! buftabline#get_curr_buf_idx()
 endfunction
 
 function! buftabline#get_dir_buffer_idx_ordered(isForward)
-	let orderBuffs = g:buftabline_ordered_buffs
+	" let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
 
     let dir = -1
     if a:isForward
@@ -123,7 +123,7 @@ function! buftabline#get_dir_buffer_idx_ordered(isForward)
 endfunction
 
 function! buftabline#get_dir_buffer_ordered(isForward)
-	" let orderBuffs = g:buftabline_ordered_buffs
+	" let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
     let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward)
 	let tgtOrdered = g:buftabline_ordered_buffs[tgtBufIdx]
 	return tgtOrdered
@@ -152,13 +152,13 @@ endfunction
 " Buffer re-ordering
 """"""""""""""""""""""""""""""""""
 function! buftabline#move_cur_buf_dir(isForward)
-	let orderBuffs = g:buftabline_ordered_buffs
+	" let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
     let curBufIdx = buftabline#get_curr_buf_idx()
     let tgtBufIdx = buftabline#get_dir_buffer_idx_ordered(a:isForward) 
 
-    let tmp = orderBuffs[curBufIdx]
-    let orderBuffs[curBufIdx] = orderBuffs[tgtBufIdx]
-    let orderBuffs[tgtBufIdx] = tmp
+    let tmp = g:buftabline_ordered_buffs[curBufIdx]
+    let g:buftabline_ordered_buffs[curBufIdx] = g:buftabline_ordered_buffs[tgtBufIdx]
+    let g:buftabline_ordered_buffs[tgtBufIdx] = tmp
 
     call buftabline#updateSessionOrder()
 	" re-render the tabline since stuff got moved around
@@ -188,6 +188,65 @@ function! buftabline#updateSessionOrder()
     endfor   
 endfunction
 
+" bufnums arg is a list of user-opened buff numbers
+function! buftabline#syncBuffs(bufnums)
+    " lookup for buffers currently loaded
+    " These may or may not be fully represented
+    " by g:buftabline_session_order
+    "
+    " This checks and attempts to correct
+    " for any differences between the loaded 
+    " buffers and ordered buffer list.
+    let bufLookup = {}
+    for bufnum in a:bufnums
+        let fname = bufname(bufnum)
+        echom "buflookup " . fname . ":" . bufnum
+        let bufLookup[fname] = bufnum
+    endfor
+
+    " Remove buffers from the saved session that shouldn't be there
+    " because they are not in the current list of buffers the client actually
+    " loaded
+    let orderBufLookup = {}
+    let orderBufRem = []
+    let idx = 0
+    for orderBufname in g:buftabline_session_order 
+        echo "orderBufname: " . orderBufname                
+        if !has_key(bufLookup, orderBufname)
+            let orderBufRem += [idx]
+        else
+            let orderBufLookup[orderBufname] = 1
+            echom "orderBufLookup " . orderBufname
+        endif
+        let idx += 1
+    endfor
+
+    for idx in orderBufRem
+        call remove(g:buftabline_session_order, idx)
+    endfor
+
+    " Map the ordered filenames to their local buffer numbers 
+    for sessionFname in g:buftabline_session_order
+        let localBuf = bufnr(expand(sessionFname))
+        let g:buftabline_ordered_buffs += [localBuf] 
+    endfor 
+
+    " Add in anything missing from the ordered list
+    for bufname in keys(bufLookup)
+        if !has_key(orderBufLookup, bufname)
+            echom "dont have key " . bufname
+            " let localBuf = bufnr(expand(bufname))
+            let localBuf = bufLookup[bufname]
+            let g:buftabline_ordered_buffs += [localBuf]
+        endif
+    endfor
+
+    " The buffers may or may not have changed
+    " but update just in case they did
+    call buftabline#updateSessionOrder()
+endfunction
+
+
 let s:prev_currentbuf = winbufnr(0)
 function! buftabline#render()
 	let show_num = g:buftabline_numbers == 1
@@ -197,82 +256,29 @@ function! buftabline#render()
 
 	let bufnums = buftabline#user_buffers()
 
-	let orderBuffs = g:buftabline_ordered_buffs
-	" session just starting, so we dont have orderBuffs created yet
-	if len(orderBuffs)==0
+	" let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
+	" session just starting, so we dont have g:buftabline_ordered_buffs created yet
+	if len(g:buftabline_ordered_buffs)==0
         
         if exists('g:buftabline_session_order') && len(g:buftabline_session_order) > 0
-            " lookup for buffers currently loaded
-            " These may or may not be fully represented
-            " by g:buftabline_session_order
-            "
-            " This checks and attempts to correct
-            " for any differences between the loaded 
-            " buffers and ordered buffer list.
-            let bufLookup = {}
-            for bufnum in bufnums
-                let fname = bufname(bufnum)
-                echom "buflookup " . fname . ":" . bufnum
-                let bufLookup[fname] = bufnum
-            endfor
-
-            " Remove buffers from the saved session that shouldn't be there
-            " because they are not in the current list of buffers the client actually
-            " loaded
-            let orderBufLookup = {}
-            let orderBufRem = []
-            let idx = 0
-            for orderBufname in g:buftabline_session_order 
-                echo "orderBufname: " . orderBufname                
-                if !has_key(bufLookup, orderBufname)
-                    let orderBufRem += [idx]
-                else
-                    let orderBufLookup[orderBufname] = 1
-                    echom "orderBufLookup " . orderBufname
-                endif
-                let idx += 1
-            endfor
-
-            for idx in orderBufRem
-                call remove(g:buftabline_session_order, idx)
-            endfor
-
-            " Map the ordered filenames to their local buffer numbers 
-            for sessionFname in g:buftabline_session_order
-                let localBuf = bufnr(expand(sessionFname))
-                let g:buftabline_ordered_buffs += [localBuf] 
-            endfor 
-           
-            " Add in anything missing from the ordered list
-            for bufname in keys(bufLookup)
-                if !has_key(orderBufLookup, bufname)
-                    echom "dont have key " . bufname
-                    " let localBuf = bufnr(expand(bufname))
-                    let localBuf = bufLookup[bufname]
-                    let g:buftabline_ordered_buffs += [localBuf]
-                endif
-            endfor
-            
-            " The buffers may or may not have changed
-            " but update just in case they did
-            call buftabline#updateSessionOrder()
-   
+            call buftabline#syncBuffs(bufnums)
         else
             " completely copy, nothing ordered exists to use
             " 
             " apparently vimscript doesnt do aliasing with this?
-            " i figured the reference created with orderBuffs would update
+            " i figured the reference created with g:buftabline_ordered_buffs would update
             " the original global array, but it doesnt seem to be the case.
             let	g:buftabline_ordered_buffs = copy(bufnums)
-            let orderBuffs = g:buftabline_ordered_buffs
+            " let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
 
             call buftabline#updateSessionOrder()
         endif
-    elseif len(orderBuffs) < len(bufnums)
+    elseif len(g:buftabline_ordered_buffs) < len(bufnums)
         " This could use the full buffer-ordered buffer correction code above
         " but this should be faster.
-        let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(orderBuffs):len(bufnums)]
-        let orderBuffs = g:buftabline_ordered_buffs
+        let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(g:buftabline_ordered_buffs):len(bufnums)]
+        " let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
+        call buftabline#updateSessionOrder()
 	endif
 
 	" pick up data on all the buffers
@@ -290,7 +296,7 @@ function! buftabline#render()
 		" This is kind of optimistic, since this could mask a bug.
 		" For instance, we could be somehow missing an ordinary buffer
 		" in our list of ordered buffers.
-        " if bufIdx >= len(orderBuffs)
+        " if bufIdx >= len(g:buftabline_ordered_buffs)
         "     echom "bufidx " . bufIdx
         "     echom "buftype " . getbufvar(bufnum, "&buftype")
         "     echom "bufname " . bufname(bufnum)
@@ -299,11 +305,11 @@ function! buftabline#render()
 		" ignore unlisted buffers and quickfix buffers
 		" because they wont be in our ordered list
 		" if buflisted(bufnum) && getbufvar(bufnum, "&buftype") != "quickfix" 
-        "     if bufIdx < len(orderBuffs)
-		"         let bufnum = orderBuffs[bufIdx]
+        "     if bufIdx < len(g:buftabline_ordered_buffs)
+		"         let bufnum = g:buftabline_ordered_buffs[bufIdx]
 		"     endif
 		" endif
-        let bufnum = orderBuffs[bufIdx]
+        let bufnum = g:buftabline_ordered_buffs[bufIdx]
 
 		"echom printf('translating %s to %s', old_bufnum, bufnum)
 	
@@ -333,20 +339,20 @@ function! buftabline#render()
 	endfor
 
 	" disambiguate same-basename files by adding trailing path segments
-	while 1
-		let groups = filter(values(tabs_by_tail),'len(v:val) > 1')
-		if ! len(groups) | break | endif
-		for group in groups
-			call remove(tabs_by_tail, group[0].tail)
-			for tab in group
-				if strlen(tab.head) && tab.head != '.'
-					let tab.tail = fnamemodify(tab.head, ':t') . '/' . tab.tail
-					let tab.head = fnamemodify(tab.head, ':h')
-				endif
-				let tabs_by_tail[tab.tail] = get(tabs_by_tail, tab.tail, []) + [tab]
-			endfor
-		endfor
-	endwhile
+	" while 1
+	"     let groups = filter(values(tabs_by_tail),'len(v:val) > 1')
+	"     if ! len(groups) | break | endif
+	"     for group in groups
+	"         call remove(tabs_by_tail, group[0].tail)
+	"         for tab in group
+	"             if strlen(tab.head) && tab.head != '.'
+	"                 let tab.tail = fnamemodify(tab.head, ':t') . '/' . tab.tail
+	"                 let tab.head = fnamemodify(tab.head, ':h')
+	"             endif
+	"             let tabs_by_tail[tab.tail] = get(tabs_by_tail, tab.tail, []) + [tab]
+	"         endfor
+	"     endfor
+	" endwhile
 
 	" now keep the current buffer center-screen as much as possible:
 
@@ -408,8 +414,10 @@ function! buftabline#render()
 	return '%1X' . join(map(tabs,'printf("%%#buftabline%s#%s%%#buftablineGrey#|",v:val.hilite,v:val.label)'),'') . '%#buftablineFill#'
 endfunction
 
+let g:update_count = 0
 function! buftabline#update(deletion)
-    " echom "buftabline update"
+    " echom "buftabline update " . g:update_count
+    " let g:update_count+=1
 	set tabline=
 	if tabpagenr('$') > 1 | set guioptions+=e showtabline=2 | return | endif
 	set guioptions-=e
@@ -448,12 +456,14 @@ function! buftabline#update(deletion)
 endfunction
 
 autocmd BufAdd    * call buftabline#update(0)
-autocmd BufLeave  * call buftabline#update(0)
-autocmd BufUnload * call buftabline#update(0)
+" autocmd BufLeave  * call buftabline#update(0)
+" autocmd BufUnload * call buftabline#update(0)
 autocmd BufEnter  * call buftabline#update(0)
 autocmd BufDelete * call buftabline#update(1)
 autocmd TabEnter  * call buftabline#update(0)
 autocmd VimEnter  * call buftabline#update(0)
+
+" autocmd BufAdd * call 
 
 "noremap <silent> <Plug>buftabline.Go(1)  :exe 'b'.buftabline#user_buffers()[0]<cr>
 "noremap <silent> <Plug>buftabline.Go(2)  :exe 'b'.buftabline#user_buffers()[1]<cr>
