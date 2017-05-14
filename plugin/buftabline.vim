@@ -33,6 +33,7 @@ augroup BufTabLine
 autocmd!
 
 hi default link BufTabLineCurrent TabLineSel
+hi BufTabLineModified cterm=none ctermfg=white ctermbg=203
 hi default link BufTabLineActive  PmenuSel
 hi default link BufTabLineHidden  TabLine
 hi default link BufTabLineFill    TabLineFill
@@ -66,14 +67,25 @@ function! buftabline#render()
 	for bufnum in bufnums
 		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
 		let tab = { 'num': bufnum }
-		let tab.hilite = currentbuf == bufnum ? 'Current' : bufwinnr(bufnum) > 0 ? 'Active' : 'Hidden'
+		let is_mod = getbufvar(bufnum, '&mod') 
+
+		if is_mod
+            let tab.hilite = 'Modified'
+		elseif currentbuf == bufnum 
+		    let tab.hilite = 'Current'
+		elseif bufwinnr(bufnum) > 0
+            let tab.hilite = 'Active'
+        else
+            let tab.hilite = 'Hidden'
+        endif
+
 		if currentbuf == bufnum | let [centerbuf, s:centerbuf] = [bufnum, bufnum] | endif
 		let bufpath = bufname(bufnum)
 		if strlen(bufpath)
 			let tab.path = fnamemodify(bufpath, ':p:~:.')
 			let tab.sep = strridx(tab.path, s:dirsep, strlen(tab.path) - 2) " keep trailing dirsep
 			let tab.label = tab.path[tab.sep + 1:]
-			let pre = ( show_mod && getbufvar(bufnum, '&mod') ? '+' : '' ) . screen_num
+			let pre = ( show_mod && is_mod ? '+' : '' ) . screen_num
 			let tab.pre = strlen(pre) ? pre . ' ' : ''
 			let tabs_per_tail[tab.label] = get(tabs_per_tail, tab.label, 0) + 1
 			let path_tabs += [tab]
