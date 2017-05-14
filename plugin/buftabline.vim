@@ -29,55 +29,18 @@ endif
 
 scriptencoding utf-8
 
-augroup buftabline
+augroup BufTabLine
 autocmd!
 
-" Example colors:
-" exe 'hi! TabLine ctermfg=250 ctermbg=234 gui=underline guibg=DarkGrey'
-" exe 'hi! TabLineSel term=reverse cterm=reverse ctermfg=110 ctermbg=234 gui=bold'
-" exe 'hi! TabLineFill term=reverse cterm=reverse ctermfg=234 ctermbg=235 gui=reverse'
-
-hi default link buftablineCurrent TabLineSel
-hi default link buftablineActive  PmenuSel
-hi default link buftablineHidden  TabLine
-hi default link buftablineFill    TabLineFill
-hi default link buftablineGrey    Normal 
+hi default link BufTabLineCurrent TabLineSel
+hi default link BufTabLineActive  PmenuSel
+hi default link BufTabLineHidden  TabLine
+hi default link BufTabLineFill    TabLineFill
 
 let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
 let g:buftabline_indicators = get(g:, 'buftabline_indicators', 0)
 let g:buftabline_separators = get(g:, 'buftabline_separators', 0)
 let g:buftabline_show       = get(g:, 'buftabline_show',       2)
-
-
-" This is the users ordered buffer
-" initially, it should be exactly the same as the buffers
-" It maps from display index => buffer number
-"
-" The buffer numbers aren't going to be the same inbetween sessions, so
-" a few things have to be changed to accomodate session loading.
-
-" to save:
-" for buffer in ordered buffers
-"     get buffer full filename (use expand)
-"     append to session array
-
-" to load:
-" for buffer in loaded buffers
-"     get full filename via expand
-"     map filename => buffer
-" for buffer in session array
-"     use bufnr(expand(filename))
-"     use filename to lookup buffer in filename:buffer map
-"     append buffer to ordered buffers
-
-" TODO:
-"   * remove messages
-"   * integrate with airline's tabline - or just theme this nicely
-"   * fix hotkeys to jump directly to buffer by number
-if !exists('g:buftabline_ordered_buffs')
-    let g:buftabline_ordered_buffs = []
-endif
-
 
 function! buftabline#user_buffers() " help buffers are always unlisted, but quickfix buffers are not
 	return filter(range(1,bufnr('$')),'buflisted(v:val) && "quickfix" !=? getbufvar(v:val, "&buftype")')
@@ -94,64 +57,13 @@ function! buftabline#render()
 	let bufnums = buftabline#user_buffers()
 	let centerbuf = s:centerbuf " prevent tabline jumping around when non-user buffer current (e.g. help)
 
-	" let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
-	" session just starting, so we dont have g:buftabline_ordered_buffs created yet
-	if len(g:buftabline_ordered_buffs)==0
-        
-        if exists('g:buftabline_session_order') && len(g:buftabline_session_order) > 0
-            call buftabline#syncBuffs(bufnums)
-        else
-            " completely copy, nothing ordered exists to use
-            " 
-            " apparently vimscript doesnt do aliasing with this?
-            " i figured the reference created with g:buftabline_ordered_buffs would update
-            " the original global array, but it doesnt seem to be the case.
-            let	g:buftabline_ordered_buffs = copy(bufnums)
-            " let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
-
-            call buftabline#updateSessionOrder()
-        endif
-    elseif len(g:buftabline_ordered_buffs) < len(bufnums)
-        " This could use the full buffer-ordered buffer correction code above
-        " but this should be faster.
-        let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs + bufnums[len(g:buftabline_ordered_buffs):len(bufnums)]
-        " let g:buftabline_ordered_buffs = g:buftabline_ordered_buffs
-        call buftabline#updateSessionOrder()
-	endif
-
 	" pick up data on all the buffers
 	let tabs = []
 	let path_tabs = []
 	let tabs_per_tail = {}
 	let currentbuf = winbufnr(0)
 	let screen_num = 0
-    
-	let bufIdx = 0
 	for bufnum in bufnums
-		let old_bufnum = bufnum
-		" There can be buffers outside of what we care about ordering
-		" EG: the quickfix buffer
-		" and yet we still need to display them
-		" This is kind of optimistic, since this could mask a bug.
-		" For instance, we could be somehow missing an ordinary buffer
-		" in our list of ordered buffers.
-        " if bufIdx >= len(g:buftabline_ordered_buffs)
-        "     echom "bufidx " . bufIdx
-        "     echom "buftype " . getbufvar(bufnum, "&buftype")
-        "     echom "bufname " . bufname(bufnum)
-        " endif
-
-		" ignore unlisted buffers and quickfix buffers
-		" because they wont be in our ordered list
-		" if buflisted(bufnum) && getbufvar(bufnum, "&buftype") != "quickfix" 
-        "     if bufIdx < len(g:buftabline_ordered_buffs)
-		"         let bufnum = g:buftabline_ordered_buffs[bufIdx]
-		"     endif
-		" endif
-        let bufnum = g:buftabline_ordered_buffs[bufIdx]
-
-		"echom printf('translating %s to %s', old_bufnum, bufnum)
-	
 		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
 		let tab = { 'num': bufnum }
 		let tab.hilite = currentbuf == bufnum ? 'Current' : bufwinnr(bufnum) > 0 ? 'Active' : 'Hidden'
@@ -172,7 +84,6 @@ function! buftabline#render()
 			\             . ( screen_num ? screen_num : '*' )
 		endif
 		let tabs += [tab]
-		let bufIdx+=1
 	endfor
 
 	" disambiguate same-basename files by adding trailing path segments
@@ -239,10 +150,7 @@ function! buftabline#render()
 	return swallowclicks . join(map(tabs,'printf("%%#BufTabLine%s#%s",v:val.hilite,strtrans(v:val.label))'),'') . '%#BufTabLineFill#'
 endfunction
 
-let g:update_count = 0
 function! buftabline#update(deletion)
-    " echom "buftabline update " . g:update_count
-    " let g:update_count+=1
 	set tabline=
 	if tabpagenr('$') > 1 | set guioptions+=e showtabline=2 | return | endif
 	set guioptions-=e
@@ -261,29 +169,10 @@ function! buftabline#update(deletion)
 	elseif 2 == g:buftabline_show
 		set showtabline=2
 	endif
-
-    if a:deletion
-        let deletedBuf = expand('<abuf>')
-
-        let bufIdx = 0
-        for buf in g:buftabline_ordered_buffs 
-            if buf == deletedBuf
-                call remove(g:buftabline_ordered_buffs, bufIdx)
-                break
-            endif
-            let bufIdx+=1
-        endfor
-
-        call buftabline#updateSessionOrder()
-    endif
-
-    set tabline=%!buftabline#render()
+	set tabline=%!buftabline#render()
 endfunction
 
 autocmd BufAdd    * call buftabline#update(0)
-" autocmd BufLeave  * call buftabline#update(0)
-" autocmd BufUnload * call buftabline#update(0)
-autocmd BufEnter  * call buftabline#update(0)
 autocmd BufDelete * call buftabline#update(1)
 autocmd TabEnter  * call buftabline#update(0)
 autocmd VimEnter  * call buftabline#update(0)
