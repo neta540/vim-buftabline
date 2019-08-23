@@ -30,7 +30,8 @@ endif
 scriptencoding utf-8
 
 hi default link BufTabLineCurrent TabLineSel
-hi BufTabLineModified cterm=none ctermfg=white ctermbg=203
+hi default link BufTabLineModified String
+hi default link BufTabLineCurrentModified Function
 hi default link BufTabLineActive  PmenuSel
 hi default link BufTabLineHidden  TabLine
 hi default link BufTabLineFill    TabLineFill
@@ -66,16 +67,19 @@ function! buftabline#render()
 		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
 		let tab = { 'num': bufnum }
 		let is_mod = getbufvar(bufnum, '&mod') 
+    let is_current = currentbuf == bufnum
 
-		if is_mod
-            let tab.hilite = 'Modified'
-		elseif currentbuf == bufnum 
+		if is_mod && is_current
+        let tab.hilite = 'CurrentModified'
+    elseif is_mod
+        let tab.hilite = 'Modified'
+		elseif is_current
 		    let tab.hilite = 'Current'
 		elseif bufwinnr(bufnum) > 0
-            let tab.hilite = 'Active'
-        else
-            let tab.hilite = 'Hidden'
-        endif
+        let tab.hilite = 'Active'
+    else
+        let tab.hilite = 'Hidden'
+    endif
 
 		if currentbuf == bufnum | let [centerbuf, s:centerbuf] = [bufnum, bufnum] | endif
 		let bufpath = bufname(bufnum)
